@@ -55,6 +55,8 @@ Pre-aggregation names should:
 cube(`Orders`, {
   sql: `select * from orders`,
 
+  ...,
+
   preAggregations: {
     main: {
       sqlAlias: `original`,
@@ -67,21 +69,29 @@ cube(`Orders`, {
 Pre-aggregations must include all dimensions, measures, and filters you will
 query with.
 
-## Rollup
+## Parameters
+
+### type
+
+Cube.js supports two types of pre-aggregations: `rollup` and `originalSql`.
+
+<h4 id="parameters-type-rollup">
+rollup
+</h4>
 
 Rollup pre-aggregations are the most effective way to boost performance of any
 analytical application. The blazing fast performance of tools like Google
 Analytics or Mixpanel are backed by a similar concept. The theory behind it lies
-in multi-dimensional analysis and Rollup pre-aggregation is in fact the result
-of [Roll-up Operation on a OLAP cube][wiki-olap-ops]. A rollup pre-aggregation
-is essentially the summarized data of the original cube grouped by selected
+in multi-dimensional analysis, and a rollup pre-aggregation is the result of a
+[roll-up operation on an OLAP cube][wiki-olap-ops]. A rollup pre-aggregation is
+essentially the summarized data of the original cube grouped by any selected
 dimensions of interest.
 
-The most winning type of Rollup pre-aggregation is Additive Rollup: all measures
-of which are based on [decomposable aggregate
+The most performant kind of rollup pre-aggregation is an **additive** rollup:
+all measures of which are based on [decomposable aggregate
 functions][wiki-composable-agg-fn]. Additive measure types are: `count`, `sum`,
 `min`, `max` or `countDistinctApprox`. The performance boost in this case is
-based on two main properties of Additive Rollup pre-aggregations:
+based on two main properties of additive rollup pre-aggregations:
 
 1. A rollup pre-aggregation table usually contains many fewer rows than its'
    corresponding original fact table. The fewer dimensions that are selected for
@@ -97,13 +107,13 @@ Rollup definitions can contain members from a single cube as well as from
 multiple cubes. In case of multiple cubes being involved, the join query will be
 built according to the standard rules of cubes joining.
 
-### Rollup selection rules
-
-Rollups are selected based on the properties found in queries made to the
-Cube.js REST API. A thorough explanation can be found under [Getting Started
+Rollups are selected for querying based on properties found in queries made to
+the Cube.js REST API. A thorough explanation can be found under [Getting Started
 with Pre-Aggregations][ref-caching-preaggs-target].
 
-## Original SQL
+<h4 id="parameters-type-originalsql">
+originalSql
+</h4>
 
 As the name suggests, it persists the results of the `sql` property of the cube.
 Pre-aggregations of type `originalSql` should **only** be used when the cube's
@@ -126,6 +136,8 @@ For example, to pre-aggregate all completed orders, you could do the following:
 cube(`CompletedOrders`, {
   sql: `select * from orders where completed = true`,
 
+  ...,
+
   preAggregations: {
     main: {
       type: `originalSql`,
@@ -135,7 +147,9 @@ cube(`CompletedOrders`, {
 });
 ```
 
-## rollupJoin
+<h4 id="parameters-type-rollupjoin">
+rollupJoin
+</h4>
 
 <!-- prettier-ignore-start -->
 [[warning | 🐣 &nbsp;&nbsp; Preview]]
@@ -149,7 +163,7 @@ for cross-database joins; you can have a data schema for a MySQL database,
 another for Postgres, and then use `rollupJoin` to join their pre-aggregations:
 
 ```javascript
-// A schema representing all companies, retrieved from MySQL
+// `schema/Companies.js` - a schema representing all companies, retrieved from MySQL
 cube(`Companies`, {
   dataSource: 'mysql',
   sql: `SELECT * from ecom.companies`,
@@ -172,13 +186,13 @@ cube(`Companies`, {
   preAggregations: {
     companiesRollup: {
       type: `rollup`,
-      dimensionReferences: [Companies.name],
+      dimensionReferences: [CUBE.name],
       external: true,
     },
   },
 });
 
-// A schema representing all users, retrieved from Postgres
+// `schema/Users.js` - a schema representing all users, retrieved from Postgres
 cube('Users', {
   dataSource: 'postgres',
   sql: `select * from users`,
@@ -207,23 +221,207 @@ cube('Users', {
   preAggregations: {
     usersRollup: {
       type: `rollup`,
-      measureReferences: [Users.count],
-      dimensionReferences: [Users.company],
+      measureReferences: [CUBE.count],
+      dimensionReferences: [CUBE.company],
       external: true,
     },
     // Here we add a new pre-aggregation of type `rollupJoin`
     joinedWithCompaniesRollup: {
       type: `rollupJoin`,
-      measureReferences: [Users.count],
+      measureReferences: [CUBE.count],
       dimensionReferences: [Companies.name],
-      rollupReferences: [Companies.companiesRollup, Users.usersRollup],
+      rollupReferences: [Companies.companiesRollup, CUBE.usersRollup],
       external: true,
     },
   },
 });
 ```
 
-## refreshKey
+### measures
+
+The `measures` property is an array of [measures from the
+cube][ref-schema-measures] that should be included in the pre-aggregation:
+
+```javascript
+cube('Orders', {
+  sql: `select * from orders`,
+
+  ...,
+
+  measures: {
+    count: {
+      type: `count`,
+    },
+  },
+
+  preAggregations: {
+    usersRollup: {
+      measures: [CUBE.count],
+    },
+  },
+});
+```
+
+### dimensions
+
+The `dimensions` property is an array of [dimensions from the
+cube][ref-schema-dimensions] that should be included in the pre-aggregation:
+
+```javascript
+cube('Orders', {
+  sql: `select * from orders`,
+
+  ...,
+
+  dimensions: {
+    status: {
+      type: `string`,
+      sql: `status`,
+    },
+  },
+
+  preAggregations: {
+    usersRollup: {
+      dimensions: [CUBE.status],
+    },
+  },
+});
+```
+
+### timeDimension
+
+The `timeDimension` property can be any [`dimension`][ref-schema-dimensions] of
+type [`time`][ref-schema-types-dim-time]. All other measures and dimensions in
+the schema are aggregated This property is an extremely useful tool for
+improving performance with massive datasets.
+
+```javascript
+cube('Orders', {
+  sql: `select * from orders`,
+
+  ...,
+
+  dimensions: {
+    createdAt: {
+      type: `time`,
+      sql: `created_at`,
+    },
+  },
+
+  preAggregations: {
+    usersRollup: {
+      ...,
+      timeDimension: [CUBE.createdAt],
+      granularity: `day`,
+    },
+  },
+});
+```
+
+A [`granularity`][self-granularity] **must** also be included in the
+pre-aggregation definition.
+
+### granularity
+
+The `granularity` property defines the granularity of data _within_ the
+pre-aggregation. If set to `week`, for example, then Cube.js will pre-aggregate
+the data by week and persist it to Cube Store.
+
+```javascript
+cube('Orders', {
+  sql: `select * from orders`,
+
+  ...,
+
+  dimensions: {
+    createdAt: {
+      type: `time`,
+      sql: `created_at`,
+    },
+  },
+
+  preAggregations: {
+    usersRollupByWeek: {
+      ...,
+      timeDimension: [CUBE.createdAt],
+      granularity: `week`,
+    },
+  },
+});
+```
+
+The value can be one of `second`, `minute`, `hour`, `day`, `week`, `month`,
+`year`. This property is required when using
+[`timeDimension`][self-timedimension].
+
+### partitionGranularity
+
+The `partitionGranularity` defines the granularity for each
+[partition][ref-caching-partitioning] of the pre-aggregation:
+
+```javascript
+cube('Orders', {
+  sql: `select * from orders`,
+
+  ...,
+
+  dimensions: {
+    createdAt: {
+      type: `time`,
+      sql: `created_at`,
+    },
+  },
+
+  preAggregations: {
+    usersRollup: {
+      ...,
+      timeDimension: [CUBE.createdAt],
+      granularity: `day`,
+      partitionGranularity: `month`,
+    },
+  },
+});
+```
+
+The value can be one of `second`, `minute`, `hour`, `day`, `week`, `month`,
+`year`. A [`timeDimension`][self-timedimension] and
+[`granularity`][self-granularity] **must** also be included in the
+pre-aggregation definition. This property is required when using [partitioned
+pre-aggregations][ref-caching-partitioning].
+
+### segments
+
+The `segments` property is an array of [segments from the
+cube][ref-schema-segments] that can target the pre-aggregation:
+
+<!-- prettier-ignore-start -->
+[[warning | ]]
+| The relevant measures/dimensions that make up the segment **must** be
+| included in the pre-aggregation definition.
+<!-- prettier-ignore-end -->
+
+```javascript
+cube(`Orders`, {
+  sql: `SELECT * FROM orders`,
+
+  ...,
+
+  segments: {
+    onlyComplete: {
+      sql: `${CUBE}.status = 'complete'`,
+    },
+  },
+
+  preAggregations: {
+    main: {
+      dimensions: [Orders.status],
+      segments: [Orders.onlyComplete],
+    },
+  },
+});
+```
+
+### refreshKey
 
 Cube.js can also take care of keeping pre-aggregations up to date with the
 `refreshKey` property. By default, it is set to `every: '1 hour'`. You can set
@@ -276,9 +474,12 @@ cube(`Orders`, {
 For possible `every` parameter values please refer to
 [`refreshKey`][ref-cube-refreshkey] documentation.
 
-## Incremental refresh
+<h4 id="parameters-type-rollup">
+Incremental refresh
+</h4>
 
-You can incrementally refresh partitioned rollups.
+You can incrementally refresh partitioned rollups. This option defaults to
+`true`.
 
 ```javascript
 cube(`Orders`, {
@@ -303,6 +504,14 @@ cube(`Orders`, {
 });
 ```
 
+<!-- prettier-ignore-start -->
+[[warning | ]]
+| Partition tables are refreshed as a whole. When a new partition table is
+| available, it replaces the old one. Old partition tables are collected by
+| [Garbage Collection][ref-caching-garbage-collection]. Append is never used to
+| add new rows to the existing tables.
+<!-- prettier-ignore-end -->
+
 The `incremental: true` flag generates a special `refreshKey` SQL query which
 triggers a refresh for partitions where the end date lies within the
 `updateWindow` from the current time. In the provided example, it will refresh
@@ -310,44 +519,7 @@ today's and the last 7 days of partitions once a day. Partitions before the
 `7 day` interval **will not** be refreshed once they are built unless the rollup
 SQL is changed.
 
-Partition tables are refreshed as a whole. When new partition table is available
-it replaces the old one. Old partition tables are collected by [Garbage
-Collection][ref-garbage-collection]. Append is never used to add new rows to the
-existing tables.
-
-An original SQL pre-aggregation can also be used with time partitioning and
-incremental `refreshKey`. It requires using `FILTER_PARAMS` inside the Cube's
-`sql` property.
-
-Below you can find an example of the partitioned `originalSql` pre-aggregation.
-
-```javascript
-cube(`Orders`, {
-  sql: `select * from visitors WHERE ${FILTER_PARAMS.visitors.created_at.filter(
-    'created_at'
-  )}`,
-
-  preAggregations: {
-    main: {
-      type: `originalSql`,
-      timeDimensionReference: created_at,
-      partitionGranularity: `month`,
-      refreshKey: {
-        every: `1 day`,
-        incremental: true,
-        updateWindow: `7 day`,
-      },
-    },
-  },
-});
-```
-
-Partition tables are refreshed as a whole. When a new partition table is
-available, it replaces the old one. Old partition tables are collected by
-[Garbage Collection][ref-caching-garbage-collection]. Append is never used to
-add new rows to the existing tables.
-
-## useOriginalSqlPreAggregations
+### useOriginalSqlPreAggregations
 
 Cube.js supports multi-stage pre-aggregations by reusing original SQL
 pre-aggregations in rollups through the `useOriginalSqlPreAggregations`
@@ -397,7 +569,7 @@ cube(`Orders`, {
 });
 ```
 
-## scheduledRefresh
+### scheduledRefresh
 
 To always keep pre-aggregations up-to-date, you can mark them as
 `scheduledRefresh: true`. Without this flag, pre-aggregations are always built
@@ -437,7 +609,7 @@ cube(`Orders`, {
 });
 ```
 
-## buildRangeStart and buildRangeEnd
+### buildRangeStart and buildRangeEnd
 
 The build range defines what partitions should be built by a scheduled refresh.
 Scheduled refreshes will **never** look beyond this range.
@@ -457,16 +629,14 @@ The refresh range for partitioned pre-aggregations can be controlled using
 cube(`Orders`, {
   sql: `select * from orders`,
 
-  // ...
+  ...,
 
   preAggregations: {
     categoryAndDate: {
-      type: `rollup`,
-      measureReferences: [Orders.count, revenue],
-      timeDimensionReference: createdAt,
+      measures: [CUBE.count],
+      timeDimension: CUBE.createdAt,
       granularity: `day`,
       partitionGranularity: `month`,
-      scheduledRefresh: true,
       buildRangeStart: {
         sql: `SELECT NOW() - interval '300 day'`,
       },
@@ -478,7 +648,7 @@ cube(`Orders`, {
 });
 ```
 
-## Indexes
+### indexes
 
 In case of pre-aggregation tables having significant cardinality, you might want
 to create indexes for them in databases which support it. This is can be done as
@@ -488,18 +658,17 @@ follows:
 cube(`Orders`, {
   sql: `select * from orders`,
 
-  // ...
+  ...,
 
   preAggregations: {
     categoryAndDate: {
-      type: `rollup`,
-      measureReferences: [Orders.count, revenue],
-      dimensionReferences: [category],
-      timeDimensionReference: createdAt,
+      measures: [CUBE.count],
+      dimensions: [CUBE.category],
+      timeDimension: CUBE.createdAt,
       granularity: `day`,
       indexes: {
-        main: {
-          columns: [category],
+        categoryIndex: {
+          columns: [CUBE.category],
         },
       },
     },
@@ -514,13 +683,13 @@ used:
 cube(`Orders`, {
   sql: `select * from orders`,
 
-  // ...
+  ...,
 
   preAggregations: {
     main: {
       type: `originalSql`,
       indexes: {
-        time: {
+        timestampIndex: {
           columns: ['timestamp'],
         },
       },
@@ -529,6 +698,7 @@ cube(`Orders`, {
 });
 ```
 
+[ref-caching-partitioning]: /caching/using-pre-aggregations#partitioning
 [ref-caching-garbage-collection]:
   /caching/using-pre-aggregations#garbage-collection
 [ref-caching-preaggs-target]:
@@ -545,7 +715,14 @@ cube(`Orders`, {
   /deployment/production-checklist#set-up-refresh-worker
 [ref-sqlalias]: /schema/reference/cube#parameters-sql-alias
 [ref-schema-funnels]: /funnels
+[ref-schema-dimensions]: /schema/reference/dimensions
+[ref-schema-measures]: /schema/reference/measures
+[ref-schema-segments]: /schema/reference/segments
+[ref-schema-types-dim-time]:
+  /schema/reference/types-and-formats#dimensions-types-time
+[self-granularity]: #parameters-granularity
 [self-origsql-preaggs]: #use-original-sql-pre-aggregations
+[self-timedimension]: #parameters-time-dimension
 [wiki-olap-ops]: https://en.wikipedia.org/wiki/OLAP_cube#Operations
 [wiki-composable-agg-fn]:
   https://en.wikipedia.org/wiki/Aggregate_function#Decomposable_aggregate_functions

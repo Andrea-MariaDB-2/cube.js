@@ -130,42 +130,6 @@ can download it [here](https://www.mongodb.com/download-center/bi-connector).
 Use `CUBEJS_DB_SSL=true` to enable SSL as MongoDB Atlas requires it. All other
 SSL-related environment variables can be left unset.
 
-### AWS RDS Postgres
-
-Use `CUBEJS_DB_SSL=true` to enable SSL if you have SSL enabled for your RDS
-cluster. Download the new certificate [here][link-aws-rds-pem], and provide the
-contents of the downloaded file to `CUBEJS_DB_SSL_CA`. All other SSL-related
-environment variables can be left unset. See [Enabling SSL][ref-enabling-ssl]
-for more details. More info on AWS RDS SSL can be found
-[here][link-aws-rds-docs].
-
-### Google Cloud SQL Postgres
-
-You can connect to an SSL-enabled MySQL database by setting `CUBEJS_DB_SSL` to
-`true`. You may also need to set `CUBEJS_DB_SSL_SERVERNAME`, depending on how
-you are [connecting to Cloud SQL][link-cloud-sql-connect].
-
-### Heroku Postgres
-
-Unless you're using a Private or Shield Heroku Postgres database, Heroku
-Postgres does not currently support verifiable certificates. [Here is the
-description of the issue from Heroku][link-heroku-postgres-issue].
-
-As a workaround you can set `rejectUnauthorized` option to `false` in the
-Cube.js Postgres driver.
-
-```js
-const PostgresDriver = require('@cubejs-backend/postgres-driver');
-module.exports = {
-  driverFactory: () =>
-    new PostgresDriver({
-      ssl: {
-        rejectUnauthorized: false,
-      },
-    }),
-};
-```
-
 ### AWS Athena
 
 For Athena, you'll need to specify the AWS access and secret keys with the
@@ -241,15 +205,6 @@ module.exports = {
     new MssqlDriver({ database: dataSource, trustedConnection: true }),
 };
 ```
-
-### MySQL
-
-To connect to a local MySQL database using a UNIX socket use
-`CUBEJS_DB_SOCKET_PATH`, by doing so, `CUBEJS_DB_HOST` will be ignored.
-
-You can connect to an SSL-enabled MySQL database by setting `CUBEJS_DB_SSL` to
-`true`. All other SSL-related environment variables can be left unset. See
-[Enabling SSL][ref-enabling-ssl] for more details.
 
 ### Druid
 
@@ -363,19 +318,12 @@ CUBEJS_DB_EXPORT_INTEGRATION=gcs_int
   https://docs.aws.amazon.com/athena/latest/ug/access.html
 [link-aws-athena-query]:
   https://docs.aws.amazon.com/athena/latest/ug/querying.html
-[link-aws-rds-pem]: https://s3.amazonaws.com/rds-downloads/rds-ca-2019-root.pem
-[link-aws-rds-docs]:
-  https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html
 [link-clickhouse-readonly]:
   https://clickhouse.tech/docs/en/operations/settings/permissions-for-queries/#settings_readonly
-[link-cloud-sql-connect]:
-  https://cloud.google.com/sql/docs/postgres/connect-functions#connecting_to
 [link-bigquery-getting-started]:
   https://cloud.google.com/docs/authentication/getting-started
 [link-bigquery-credentials]:
   https://console.cloud.google.com/apis/credentials/serviceaccountkey
-[link-heroku-postgres-issue]:
-  https://help.heroku.com/3DELT3RK/why-can-t-my-third-party-utility-connect-to-heroku-postgres-with-ssl
 [link-snowflake-gcs-integration]:
   https://docs.snowflake.com/en/user-guide/data-load-gcs-config.html
 [link-bigquery-regional-locations]:
